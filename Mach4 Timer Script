@@ -1,4 +1,5 @@
 --Paste this into the WX Screen Timer Script
+--The timer is enabled to run every 200ms by the Pendant Enable Button
 if timer == 0 then
 	if(machEnabled~=0) then
 		SDRO.SendSerialDRO() --Send DRO & Button data to Pendant
