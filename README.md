@@ -1,8 +1,8 @@
 # Mach4-Serial-Pendant
 CNC Control Pendant for Mach4, connected through USB Serial
-​There are surprisingly few Pendants (CNC Machine, remote controls) for Mach4 and even fewer DIY projects.  In fact, the only one I found is on Instructables here: https://www.instructables.com/id/Mach4-Pendant/
+​There are surprisingly few Pendants (CNC Machine, remote controls) for Mach4 and even fewer DIY projects.  Pretty much the only one I found is on Instructables here: https://www.instructables.com/id/Mach4-Pendant/
 
-While that one looks good - it doesn't fully work.  The method they've used to send data to Mach4 does not allow any return data.  None of the common ways to interface them does - but I had an idea!
+While it looks OK - it doesn't fully work.  The method they've used to send data to Mach4 (Keystroke Injection) does not allow any return data.
 
 This Pendant just plugs into a USB port.  It uses an Arduino Nano which the PC recognises as a Serial device.  It sends & receives the Pendant data to a script running inside Mach4.
 
