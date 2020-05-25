@@ -1,0 +1,19 @@
+--In the Mach4 Screen Editor, Add a new button (or re-use one of the blank buttons)
+--And paste this script into the Clicked Script.  The Variables used in this are defined
+--in the Screen Load Script
+
+if(Pendant_OK) then
+	if(bSerialDROActive)then
+		scr.StopTimer(0)
+		bSerialDROActive = false --Deactivate sending
+		--Change the button colour
+		scr.SetProperty('btnSerialDRO','Bg Color','')	
+	else
+		bSerialDROActive = true --Activate Sending
+		--Change the button colour
+		scr.SetProperty('btnSerialDRO','Bg Color','#00FF00')
+		
+		scr.StartTimer(0,200,0)
+	end
+	SDRO.UpdatePendant(bSerialDROActive)
+end
