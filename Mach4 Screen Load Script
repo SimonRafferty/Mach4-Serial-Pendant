@@ -1,0 +1,22 @@
+--Paste this into the WX Screen Load script (doesn't matter where, so long as it's not inside another function)
+--SerialDRO module
+package.loaded.SerialDRO = nil
+SDRO = require "SerialDRO"
+
+--Define Global Variables required for Pendant
+bSerialDROActive = false --DRO Activated by button
+LastX = 9999 --Storage for last positions sent to save time & serial data
+LastY = 9999
+LastZ = 9999 --Set to unlikely values so they are updated the first tim activated
+LastSpin = 9999
+LastFRO = 9999
+Pendant_OK = false
+
+--Set the background colour of the Button to Grey
+scr.SetProperty('btnSerialDRO','Bg Color','') 
+
+--Open the serial port
+--The OpenPort function scans all the serial ports until it finds the Pendant
+if(SDRO.OpenPort()=="") then
+	Pendant_OK = true
+end
