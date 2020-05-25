@@ -1,0 +1,420 @@
+--Create a new Module in Mach4 from the Script Editor and name it SerialDRO
+--Then paste this code into the module
+
+local SerialDRO = {}
+
+
+	local inst = mc.mcGetInstance()
+	local rs232 = require("luars232")
+	local port_type = "COM" -- The Open port function will try all the com ports until it finds the right one
+	local port_name = "COM1"
+	local read_len = 1 -- read one byte
+	local timeout = 5 -- in miliseconds
+	local ResponseTimer = 5 --Time to delay for drive response in milliseconds
+	local max_flush = 4096 --Maximum number of characters to flush from the buffer while reading
+	local max_length = 18 --Longest Serial Packet
+	local out = io.stderr
+	local p = 0 --Serial Port handle
+	
+	
+	function SerialDRO.SendSerialDRO()
+	--Place a call to this inside a timer
+	
+	--You can use this to implement an external DRO by Serial
+	--For example, if you wanted the axis coordinates shown on an external pendant
+	--Simon Rafferty 2020 SimonSFX[at]Outlook.com
+
+		
+		
+		local RV = 0 --Return value
+		local XAxisPos = 0
+		local YAxisPos = 0
+		local ZAxisPos = 0
+		local SpindleSpeed = 0
+		local FRO = 0
+		local len_written = 0
+		
+		
+		
+		if(bSerialDROActive) then
+			
+			
+			
+			XAxisPos,RV = mc.mcAxisGetPos(inst,0) 
+			YAxisPos,RV = mc.mcAxisGetPos(inst,1) 
+			ZAxisPos,RV = mc.mcAxisGetPos(inst,2) 
+			--SpindleSpeed = mc.mcSpindleGetTrueRPM(inst)
+			--FRO = mc.mcCntlGetFRO(inst)
+			--mc.mcCntlSetFRO(inst, percent)
+			
+			--Only open Comms channel if we need to send something
+			--if((XAxisPos~=LastX) or (YAxisPos~=LastY) or (ZAxisPos~=LastZ) or (SpindleSpeed~=LastSpin) or (FRO~=LastFRO)) then
+				--mc.mcCntlSetLastError(inst, "Sending Serial DROs")
+				
+				--Send DRO Poitions and only send values that have changed
+
+				--if(RV==0) then
+					--If positions retrieved correctly, send by Serial
+					if(XAxisPos~=LastX and mc.mcAxisIsStill(inst,0)) then
+						RV, len_written = p:write(string.format("D X %.4f \n",XAxisPos), 5)
+						mc.mcCntlSetLastError(inst, "Sent "..string.format("D X %.4f \n",XAxisPos))
+						LastX = XAxisPos
+					end
+					if(YAxisPos~=LastY and mc.mcAxisIsStill(inst,1)) then
+						RV, len_written = p:write(string.format("D Y %.4f \n",YAxisPos), 5)
+						LastY = YAxisPos
+					end
+					if(ZAxisPos~=LastZ and mc.mcAxisIsStill(inst,2) ) then
+						RV, len_written = p:write(string.format("D Z %.4f \n",ZAxisPos), 5)
+						LastZ = ZAxisPos
+					end
+					
+				--end
+				--mc.mcCntlSetLastError(inst, "Sent Serial DRO Values")
+
+				
+				
+				
+				
+				
+				--LastSpin = SpindleSpeed
+				--LastFRO = FRO
+				
+			--end
+		end
+
+
+	end
+
+
+function SerialDRO.OpenPort()
+	--mc.mcCntlSetLastError(inst, "Starting Serial Port Open Function")
+	--This function uses the RS232 library to open a serial port using the global variable port_name
+	--Port settings are assigned immediately
+	local ES = ""
+	local RS = ""
+	local RV = 0
+	local data_read = ""
+	local temp_port_name = ""
+	
+	port_name = ""
+	
+	--Open Serial port using the RS232 library and check for errors
+	for PortNo=1,30,1 do --Traverse all the possible port numbers
+		if(temp_port_name~="" and p~=nil) then
+			p:close()
+		end
+		temp_port_name = port_type..tostring(PortNo) 
+		mc.mcCntlSetLastError(inst, "Looking for Pendant on: "..temp_port_name)
+		e, p = rs232.open(temp_port_name)
+		if(p~=nil and e == rs232.RS232_ERR_NOERROR) then
+			--Test port to see if Pendant connected
+			mc.mcCntlSetLastError(inst, "Port Opened OK: "..temp_port_name)
+			--Arduino resets on Serial Connect. Give it a couple of seconds
+			wx.wxMilliSleep(3000) 
+			assert(p:set_baud_rate(rs232.RS232_BAUD_115200) == rs232.RS232_ERR_NOERROR)
+			assert(p:set_data_bits(rs232.RS232_DATA_8) == rs232.RS232_ERR_NOERROR)
+			assert(p:set_parity(rs232.RS232_PARITY_NONE) == rs232.RS232_ERR_NOERROR)
+			assert(p:set_stop_bits(rs232.RS232_STOP_1) == rs232.RS232_ERR_NOERROR)
+			assert(p:set_flow_control(rs232.RS232_FLOW_OFF)  == rs232.RS232_ERR_NOERROR)
+			SerialDRO.FlushBuffer()
+			mc.mcCntlSetLastError(inst, "Sending O: "..temp_port_name)
+			p:write("O \n",5) --If this is correct, Pendant will reply with "K"
+			RV, data_read, size = p:read(1, 500) --Wait 500ms for response
+			if(data_read~=nil) then
+				mc.mcCntlSetLastError(inst, "Got a response: "..data_read)
+			end
+			if (RV == rs232.RS232_ERR_NOERROR) then
+				if(data_read~=nil) then
+					mc.mcCntlSetLastError(inst, "Got a response: "..data_read)
+					rString = TrimString(data_read) --Get rid of white space at end
+					if(rString=="K") then
+						--This is the correct port
+						port_name = temp_port_name
+						mc.mcCntlSetLastError(inst, "Pendant found on "..port_name)
+					end
+				end
+			end
+		end
+		if(port_name~="") then
+			break --Terminate outer loop
+		end							
+	end
+	
+	if(port_name=="") then
+		--Pendant not found
+		mc.mcCntlSetLastError(inst, "Pendant not found!!")
+		return "Not Found"
+	end
+	
+	
+	--Deselect Jog Axis for safety
+	mc.mcMpgSetAxis(inst, 0, -1) --No Axis
+	
+
+	return ES
+end
+
+function SerialDRO.ClosePort()
+	local ES = ""
+	local RS = ""
+	local RV = 0
+	
+	p:close()
+	
+	--WriteRegister("SerialOpen", 0)
+	return ES
+end
+
+function SerialDRO.FlushBuffer()
+	--Windows automatically fills a serial buffer with characters (up to 4096 I think)
+	--This function reads the entire buffer to empty it out
+	local ES = ""
+	local RS = ""
+	local RV = 0
+	local data_read
+	local size
+
+	--RV, data_read, size = p:read(max_flush, timeout)
+	RV = p:flush()
+	if RV ~= rs232.RS232_ERR_NOERROR then; ES = "F0201"..string.format("%02X",RV)..":"; return ES; end
+	return ES
+end
+
+function SerialDRO.ReadPendant()
+--Place a call to this inside a timer
+	local data_read = ""
+	local size 
+	local ES = ""
+	local RS = ""
+	local RV = 0
+	rString = ""
+	--mc.mcCntlSetLastError(inst, "ReadPendant Called")
+		
+	RV, data_read, size = p:read(1, timeout)
+	if (RV ~= rs232.RS232_ERR_NOERROR) then
+		--mc.mcCntlSetLastError(inst, "Read Serial Error"..string.format("%02X",RV)..":")
+	end
+	
+	if(data_read~=nil) then
+		
+		rString = rString..data_read
+		for i = 0,max_length,1 do --Flush the buffer until a linefeed is found
+			RV, data_read, size = p:read(1, timeout)
+			if (RV ~= rs232.RS232_ERR_NOERROR) then; ES = "Read Serial Error"..string.format("%02X",RV)..":"; return ES; end
+			
+			if (data_read == nil or i == max_length) then; ES = "Nothing Read:"; return ES; end
+			
+			if data_read == "\n" then break end
+			
+			rString = rString..data_read
+			
+		end
+		--mc.mcCntlSetLastError(inst, "Read: "..rString)
+		p:flush()
+		rString = TrimString(rString) --Get rid of white space at end
+		SerialDRO.CommandEnact(rString) --Enact whatever command was received
+		
+	end
+end
+
+
+function TrimString(s)
+   return s:match'^%s*(.*%S)' or ''
+end
+
+function SerialDRO.UpdatePendant(bMPGActive)
+--Send state of all the DROs and buttons
+local nJogAxis = 0
+local fJogInc = 0
+--mc.mcCntlSetLastError(inst, "Active: "..tostring(bMPGActive))
+	--Show Jog Axis
+	p:write("J N \n", 5)
+	--nJogAxis=mc.mcMpgGetAxis(inst, 0) 
+	--if(nJogAxis==0) then 
+	--	p:write("J X \n", 5)
+	--end
+	--if(nJogAxis==1) then 
+	--	p:write("J Y \n", 5)
+	--end
+	--if(nJogAxis==2) then 
+	--	p:write("J Z \n", 5)
+	--end
+	
+	--Show Jog Increment
+	fJogInc = mc.mcJogGetInc(inst, 0)
+	if(fJogInc==0.001) then
+		p:write("I 1\n", 5)
+	end
+	if(fJogInc==0.010) then
+		p:write("I 2\n", 5)
+	end
+	if(fJogInc==0.100) then
+		p:write("I 3\n", 5)
+	end
+	if(fJogInc==1.000) then
+		p:write("I 4\n", 5)
+	end
+	
+	--Show enabled state
+	if(machEnabled==0 or bMPGActive==false) then
+		p:write("B E 0 \n", 5)  
+	else
+		p:write("B E 1 \n", 5)
+	end
+
+	--Show Coolant state
+	local OSigCool = mc.mcSignalGetHandle (inst,mc.OSIG_COOLANTON)
+	if(mc.mcSignalGetState(OSigCool)==0) then
+		p:write("B C 0\n", 5)
+	else
+		p:write("B C 1\n", 5)
+	end
+	
+	--Show Axis DROs
+	XAxisPos,RV = mc.mcAxisGetPos(inst,0) 
+	YAxisPos,RV = mc.mcAxisGetPos(inst,1) 
+	ZAxisPos,RV = mc.mcAxisGetPos(inst,2) 
+	RV, len_written = p:write(string.format("D X %.4f \n",XAxisPos), 5)
+	LastX = XAxisPos
+	RV, len_written = p:write(string.format("D Y %.4f \n",YAxisPos), 5)
+	LastY = YAxisPos
+	RV, len_written = p:write(string.format("D Z %.4f \n",ZAxisPos), 5)
+
+end
+
+
+function SerialDRO.CommandEnact(Command)
+-- Sent Commands:
+-- I : MPG Increment    D : MPG Decrement
+-- X : Jog X Axis      Y : Jog Y Axis      Z : Jog Z Axis      F : Feed Rate Override   Q : Spindle Override  N : Move No Axis (disable MPG)         
+-- 1 : Jog Inc 0.001    2 : Jog Inc 0.010    3 : Jog Inc 0.100    4 : Jog Inc 1.000
+-- E : E-Stop
+-- C : Coolant (Lower case to turn off)
+-- H : Feed Hold
+-- S : Start Cycle
+
+-- This takes a single character string as a parameter and uses it to enact
+-- some of the buttons / features of Mach4
+-- The command character is received from the pendant over serial
+
+	--mc.mcCntlSetLastError(inst, "Process Command: '"..Command.."'")
+
+    if Command == "X" then
+        mc.mcMpgSetAxis(inst, 0, 0) --X Axis
+		p:write("J X \n", 5)
+        mc.mcCntlSetLastError(inst, "Jog X Selected")
+        
+    elseif Command == "Y" then
+        mc.mcMpgSetAxis(inst, 0, 1) --Y Axis
+		p:write("J Y \n", 5)
+        mc.mcCntlSetLastError(inst, "Jog Y Selected")
+        
+    elseif Command == "Z" then
+        mc.mcMpgSetAxis(inst, 0, 2) --Z Axis
+		p:write("J Z \n", 5)
+        mc.mcCntlSetLastError(inst, "Jog Z Selected")
+        
+    elseif Command == "A" then
+        mc.mcMpgSetAxis(inst, 0, 3) --A Axis
+        mc.mcCntlSetLastError(inst, "Jog A Selected")
+        
+    elseif Command == "N" then
+        mc.mcMpgSetAxis(inst, 0, -1) --No Axis
+        mc.mcCntlSetLastError(inst, "Jog  No Axis Selected")
+        
+		
+    elseif Command == "1" then
+		mc.mcJogSetInc(inst, 0, .001)
+		mc.mcJogSetInc(inst, 1, .001)
+		mc.mcJogSetInc(inst, 2, .001)
+		p:write("I 1\n", 5)
+		mc.mcCntlSetLastError(inst, "Jog Increment 0.001")
+    elseif Command == "2" then
+		mc.mcJogSetInc(inst, 0, .010)
+		mc.mcJogSetInc(inst, 1, .010)
+		mc.mcJogSetInc(inst, 2, .010)
+		p:write("I 2\n", 5)
+		mc.mcCntlSetLastError(inst, "Jog Increment 0.010")
+    elseif Command == "3" then
+		mc.mcJogSetInc(inst, 0, .100)
+		mc.mcJogSetInc(inst, 1, .100)
+		mc.mcJogSetInc(inst, 2, .100)
+		p:write("I 3\n", 5)
+		mc.mcCntlSetLastError(inst, "Jog Increment 0.100")
+    elseif Command == "4" then
+		mc.mcJogSetInc(inst, 0, 1.000)
+		mc.mcJogSetInc(inst, 1, 1.000)
+		mc.mcJogSetInc(inst, 2, 1.000)
+		p:write("I 4\n", 5)
+		mc.mcCntlSetLastError(inst, "Jog Increment 1.000")
+		
+    elseif Command == "E" then
+		if(machEnabled==0) then
+			p:write("B E 0 \n", 5)
+		else
+			p:write("B E 1 \n", 5)
+			mc.mcCntlEStop(inst)
+			mc.mcCntlSetLastError(inst, "E STOP")
+		end
+			
+    elseif Command == "C" then --Toggle Coolant
+		local OSigCool = mc.mcSignalGetHandle (inst,mc.OSIG_COOLANTON)
+		if(mc.mcSignalGetState(OSigCool)==0) then
+			mc.mcSignalSetState(OSigCool,1)
+			p:write("B C 1\n", 5)
+			mc.mcCntlSetLastError(inst, "Coolant On")		
+		else
+			mc.mcSignalSetState(OSigCool,0)
+			p:write("B C 0\n", 5)
+			mc.mcCntlSetLastError(inst, "Coolant Off")		
+		end
+		
+    elseif Command == "S" then --Cycle Start
+		p:write("B S 1\n", 5)  --Turns off STOP and on START light
+		p:write("B H 0\n", 5)  --Turns off HOLD light
+		mc.mcCntlCycleStart(inst)
+		
+    elseif Command == "H" then --Cycle Start
+		p:write("B H 1\n", 5)  --Turns on HOLD light
+		mc.mcCntlFeedHold(inst)
+		
+    elseif Command == "T" then --Cycle Start
+		p:write("B S 0\n", 5) --Turns off START and on STOP light
+		p:write("B H 0\n", 5) --Turns off HOLD light
+		mc.mcCntlCycleStop(inst)
+		
+	
+    elseif Command == "I" then
+		--mc.mcCntlSetLastError(inst, "Jog INC")
+        JogInc=mc.mcJogGetInc(inst,0)
+		MPGAxis = mc.mcMpgGetAxis(inst, 0)
+		if(mc.mcAxisIsStill(inst,MPGAxis)) then
+			mc.mcJogIncStart(inst, MPGAxis, JogInc)
+		end
+		
+    elseif Command == "D" then
+		--mc.mcCntlSetLastError(inst, "Jog DEC")
+        JogInc=mc.mcJogGetInc(inst,0)
+		MPGAxis = mc.mcMpgGetAxis(inst, 0)
+		if(mc.mcAxisIsStill(inst,MPGAxis)) then
+			mc.mcJogIncStart(inst, MPGAxis, -1 * JogInc)
+		end
+	--Add your own cases here	
+		
+		
+    end
+
+
+end
+
+	if (mc.mcInEditor() == 1) then
+		--If you get a 'not found' error here, change the path below to where load_modules.mcs lives
+		--If, like me, you don't have a copy, you can download it here: 
+		--https://www.machsupport.com/forum/index.php?action=dlattach;topic=34318.0;attach=45828
+		
+		--dofile (path .. "\\Profiles\\" .. profile .. "\\Macros\\load_modules.mcs")
+		SendSerialDRO()
+	end
+
+return SerialDRO
