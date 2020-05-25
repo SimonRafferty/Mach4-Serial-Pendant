@@ -1,0 +1,15 @@
+--Paste this into the WX Screen Timer Script
+if timer == 0 then
+	if(machEnabled~=0) then
+		SDRO.SendSerialDRO() --Send DRO & Button data to Pendant
+		SDRO.ReadPendant() --Read Commands from Pendant, including jogging
+	else
+		--Mach disabled, disable pendant and pendant button
+		bSerialDROActive = false
+		scr.SetProperty('btnSerialDRO','Bg Color','')
+		scr.StopTimer(0)
+		SDRO.UpdatePendant(bSerialDROActive)
+	end
+	
+
+end
