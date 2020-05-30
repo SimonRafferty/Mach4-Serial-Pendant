@@ -1,8 +1,6 @@
 # Mach4-Serial-Pendant
 CNC Control Pendant for Mach4, connected through USB Serial
-​There are surprisingly few Pendants (CNC Machine, remote controls) for Mach4 and even fewer DIY projects.  Pretty much the only one I found is on Instructables here: https://www.instructables.com/id/Mach4-Pendant/
-
-While it looks OK - it doesn't fully work.  The method they've used to send data to Mach4 (Keystroke Injection) does not allow any return data.
+​There are surprisingly few Pendants (CNC Machine, remote controls) for Mach4 and even fewer DIY projects. 
 
 This Pendant just plugs into a USB port.  It uses an Arduino Nano which the PC recognises as a Serial device.  It sends & receives the Pendant data to a script running inside Mach4.
 
@@ -11,6 +9,13 @@ The Pendant sends, for example, a button press, to Mach4.  Mach4 then sends the 
 The Pendant I linked above has another, more subtle problem.  It uses a Resistive Touch Screen.  If you've ever tried to use a Resistive screen with wet fingers, you'll know it doesn't work!  The moisture in your fingerprint continues to register as a finger!
 
 The answer is to use a Capacitive Touch Screen.  Unfortunately, there are not many small, arduino friendly screens available!  The one I eventually bought is called an H35B-IC.  There are a few posts on line from people failing to make it work through poor documentation, librarys & software but with some help from the vendor on eBay, I did make it work.
+
+Easyest Installation on Mach4:
+
+If you've not added any macros / buttons to Mach4 yet & use the WX Screen Set, just take a take a copy of your original WX.set (just in case) and replace the original with the one here.  It is the standard set with an extra button on the Jog Panel to enable the Pendant.  You will need to put SerialDRO.lua in the modules folder and install the Arduino Serial Driver (from the Arduino IDE Download).
+
+Burn the Arduino Sketch (above) on to your Arduino Nano.  When it's plugged in to any serial port, Mach4 will find it when the WX Screen loads.  You'll need to re-load the screen if you unplug the Pendant. 
+
 
 Bill of Materials:
 
