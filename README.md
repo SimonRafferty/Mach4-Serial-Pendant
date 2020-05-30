@@ -10,7 +10,7 @@ The Pendant I linked above has another, more subtle problem.  It uses a Resistiv
 
 The answer is to use a Capacitive Touch Screen.  Unfortunately, there are not many small, arduino friendly screens available!  The one I eventually bought is called an H35B-IC.  There are a few posts on line from people failing to make it work through poor documentation, librarys & software but with some help from the vendor on eBay, I did make it work.
 
-Easyest Installation on Mach4:
+Easy Installation on Mach4:
 
 If you've not added any macros / buttons to Mach4 yet & use the WX Screen Set, just take a take a copy of your original WX.set (just in case) and replace the original with the one here.  It is the standard set with an extra button on the Jog Panel to enable the Pendant.  You will need to put SerialDRO.lua in the modules folder and install the Arduino Serial Driver (from the Arduino IDE Download).
 
